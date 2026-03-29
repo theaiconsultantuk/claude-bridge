@@ -1,4 +1,4 @@
-# Add this service to the OpenClaw Coolify service docker-compose
+# Add this service block to the OpenClaw Coolify service docker-compose
 # Or deploy as a separate Coolify service pointing to the Git repo
 
 services:
@@ -14,8 +14,8 @@ services:
       - REQUIRE_APPROVAL=${REQUIRE_APPROVAL:-true}
       - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-4000}
       - WORKSPACE=/workspace
-      # Passes Claude Code config
       - CLAUDE_CONFIG_DIR=/workspace/.claude
+      - BRIDGE_TELEGRAM_POLL=false
     volumes:
       - bridge-workspace:/workspace
     healthcheck:
@@ -24,8 +24,23 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
-    # No ports exposed — only reachable from within Docker network
-    # OpenClaw calls it as http://claude-bridge:8765
+
+  claude-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile.relay
+    environment:
+      - OPENCLAW_URL=${OPENCLAW_URL:-wss://openclaw.theaiconsultant.co.uk}
+      - OPENCLAW_USER=${OPENCLAW_USER}
+      - OPENCLAW_PASS=${OPENCLAW_PASS}
+      - OPENCLAW_TOKEN=${OPENCLAW_TOKEN}
+      - OPENCLAW_SESSION=${OPENCLAW_SESSION:-agent:main:main}
+      - BRIDGE_URL=${BRIDGE_URL:-http://claude-bridge:8765}
+      - BRIDGE_SECRET=${BRIDGE_SECRET}
+    depends_on:
+      claude-bridge:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   bridge-workspace:
