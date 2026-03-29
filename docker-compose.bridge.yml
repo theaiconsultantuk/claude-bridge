@@ -1,0 +1,31 @@
+# Add this service to the OpenClaw Coolify service docker-compose
+# Or deploy as a separate Coolify service pointing to the Git repo
+
+services:
+  claude-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BRIDGE_SECRET=${BRIDGE_SECRET}
+      - REQUIRE_APPROVAL=${REQUIRE_APPROVAL:-true}
+      - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-4000}
+      - WORKSPACE=/workspace
+      # Passes Claude Code config
+      - CLAUDE_CONFIG_DIR=/workspace/.claude
+    volumes:
+      - bridge-workspace:/workspace
+    healthcheck:
+      test: [CMD, curl, -sf, "http://127.0.0.1:8765/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    # No ports exposed — only reachable from within Docker network
+    # OpenClaw calls it as http://claude-bridge:8765
+
+volumes:
+  bridge-workspace:
