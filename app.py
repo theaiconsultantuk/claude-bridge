@@ -25,7 +25,7 @@ BRIDGE_TELEGRAM_POLL = os.environ.get("BRIDGE_TELEGRAM_POLL", "false").lower() =
 BRIDGE_SECRET = os.environ.get("BRIDGE_SECRET", "")
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 REQUIRE_APPROVAL = os.environ.get("REQUIRE_APPROVAL", "true").lower() == "true"
-MAX_TOKENS = int(os.environ.get("CLAUDE_MAX_TOKENS", "4000"))
+MAX_BUDGET_USD = float(os.environ.get("CLAUDE_MAX_BUDGET_USD", "1.0"))
 WORKSPACE = os.environ.get("WORKSPACE", "/workspace")
 
 # In-memory job store (sufficient for personal use)
@@ -71,7 +71,7 @@ def run_claude(task: str, context: Optional[str] = None) -> tuple[bool, str]:
 
     try:
         result = subprocess.run(
-            ["claude", "--print", "--max-tokens", str(MAX_TOKENS), prompt],
+            ["claude", "--print", "--max-budget-usd", str(MAX_BUDGET_USD), prompt],
             capture_output=True,
             text=True,
             timeout=300,  # 5 minute timeout
