@@ -19,6 +19,9 @@ app = FastAPI(title="Claude Bridge", version="1.0.0")
 # Config from environment
 TELEGRAM_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_CHAT_ID = str(os.environ["TELEGRAM_CHAT_ID"])
+# Set BRIDGE_TELEGRAM_POLL=true ONLY if bridge has its own dedicated bot token.
+# Default false: OpenClaw handles Telegram receiving, bridge only sends notifications.
+BRIDGE_TELEGRAM_POLL = os.environ.get("BRIDGE_TELEGRAM_POLL", "false").lower() == "true"
 BRIDGE_SECRET = os.environ.get("BRIDGE_SECRET", "")
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 REQUIRE_APPROVAL = os.environ.get("REQUIRE_APPROVAL", "true").lower() == "true"
@@ -215,7 +218,8 @@ async def telegram_webhook(request: Request):
 
 @app.on_event("startup")
 async def start_telegram_polling():
-    asyncio.create_task(_poll_telegram())
+    if BRIDGE_TELEGRAM_POLL:
+        asyncio.create_task(_poll_telegram())
 
 
 async def _poll_telegram():
