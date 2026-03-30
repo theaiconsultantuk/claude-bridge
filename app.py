@@ -430,9 +430,17 @@ async def _run_job(job_id: str):
     await tg(f"🔄 Running job `{job_id}`...\n_{job['task'][:100]}_")
 
     loop = asyncio.get_event_loop()
-    success, output = await loop.run_in_executor(
-        None, run_claude, job["task"], job.get("context")
-    )
+    future = loop.run_in_executor(None, run_claude, job["task"], job.get("context"))
+
+    # Heartbeat: ping every 45s so you know it's still alive on long jobs
+    elapsed = 0
+    while not future.done():
+        await asyncio.sleep(5)
+        elapsed += 5
+        if elapsed % 45 == 0:
+            await tg(f"⏳ Job `{job_id}` still running... ({elapsed}s)")
+
+    success, output = await future
 
     job["status"] = "completed" if success else "failed"
     job["output"] = output

@@ -12,12 +12,12 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - BRIDGE_SECRET=${BRIDGE_SECRET}
       - REQUIRE_APPROVAL=${REQUIRE_APPROVAL:-true}
-      - CLAUDE_MAX_BUDGET_USD=${CLAUDE_MAX_BUDGET_USD:-1.0}
+      - CLAUDE_MAX_BUDGET_USD=${CLAUDE_MAX_BUDGET_USD:-5.0}
       - WORKSPACE=/workspace
       - VPS_HOST=${VPS_HOST:-}
       - VPS_WORKSPACE=${VPS_WORKSPACE:-/root/claude-workspace}
       - VPS_SSH_KEY_B64=${VPS_SSH_KEY_B64:-}
-      - BRIDGE_TELEGRAM_POLL=false
+      - BRIDGE_TELEGRAM_POLL=${BRIDGE_TELEGRAM_POLL:-true}
     volumes:
       - bridge-workspace:/workspace
     healthcheck:
