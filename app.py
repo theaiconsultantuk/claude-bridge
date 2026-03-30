@@ -105,19 +105,44 @@ def run_claude(task: str, context: Optional[str] = None) -> tuple[bool, str]:
         return False, "No execution backend configured (set VPS_HOST+VPS_SSH_KEY_B64 or ANTHROPIC_API_KEY)"
 
 
+def _parse_model_tier(prompt: str) -> tuple[str, float, str]:
+    """
+    Parse optional model tier prefix from prompt.
+    Supports: [haiku], [sonnet], [opus] at start of task.
+    Returns (cleaned_prompt, budget_usd, model_flag).
+    """
+    import re
+    tiers = {
+        "haiku":  (0.10, "claude-haiku-4-5-20251001"),
+        "sonnet": (MAX_BUDGET_USD, "claude-sonnet-4-6"),
+        "opus":   (2.00,  "claude-opus-4-6"),
+    }
+    m = re.match(r"^\[(haiku|sonnet|opus)\]\s*", prompt, re.IGNORECASE)
+    if m:
+        tier = m.group(1).lower()
+        budget, model = tiers[tier]
+        cleaned = prompt[m.end():]
+        return cleaned, budget, model
+    # Default: sonnet at configured budget
+    return prompt, MAX_BUDGET_USD, "claude-sonnet-4-6"
+
+
 def _run_via_ssh(prompt: str) -> tuple[bool, str]:
     """Run claude --print on the VPS host via SSH using the Max OAuth session."""
     if not _ssh_key_file:
         return False, "SSH key not configured"
 
+    # Parse model tier prefix
+    clean_prompt, budget, model = _parse_model_tier(prompt)
+
     # Encode the entire Python script (which contains the base64-encoded task)
     # This avoids any shell escaping issues on the remote side.
-    task_b64 = base64.b64encode(prompt.encode()).decode()
+    task_b64 = base64.b64encode(clean_prompt.encode()).decode()
 
     py_script = (
         "import subprocess,sys,base64,os;"
         f"task=base64.b64decode(b'{task_b64}').decode();"
-        f"r=subprocess.run(['claude','--print','--max-budget-usd','{MAX_BUDGET_USD}',task],"
+        f"r=subprocess.run(['claude','--print','--max-budget-usd','{budget}',task],"
         f"capture_output=True,text=True,timeout=290,"
         f"cwd='{VPS_WORKSPACE}',env={{**os.environ}});"
         "sys.stdout.write(r.stdout);"
