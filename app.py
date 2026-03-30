@@ -374,6 +374,26 @@ async def _poll_telegram():
 
 
 async def _handle_telegram_command(text: str):
+    # Job creation — same prefixes as relay
+    lower = text.lower()
+    for prefix in ("run:", "claude:", "task:", "!run ", "!claude "):
+        if lower.startswith(prefix):
+            task = text[len(prefix):].strip()
+            if task:
+                job_id = str(uuid.uuid4())[:8]
+                job = {
+                    "id": job_id,
+                    "task": task,
+                    "context": None,
+                    "status": "pending",
+                    "created_at": datetime.utcnow().isoformat(),
+                    "output": None,
+                    "error": None,
+                }
+                jobs[job_id] = job
+                asyncio.create_task(_request_approval(job_id))
+            return
+
     if text.startswith("/approve "):
         job_id = text.split()[1]
         job = jobs.get(job_id)
