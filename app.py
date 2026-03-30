@@ -81,12 +81,15 @@ class JobResponse(BaseModel):
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async def tg(text: str):
+async def tg(text: str, reply_markup: dict = None):
     """Send message to Telegram."""
     async with httpx.AsyncClient() as client:
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         await client.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"},
+            json=payload,
             timeout=15,
         )
 
@@ -113,9 +116,9 @@ def _parse_model_tier(prompt: str) -> tuple[str, float, str]:
     """
     import re
     tiers = {
-        "haiku":  (0.10, "claude-haiku-4-5-20251001"),
+        "haiku":  (1.00, "claude-haiku-4-5-20251001"),
         "sonnet": (MAX_BUDGET_USD, "claude-sonnet-4-6"),
-        "opus":   (2.00,  "claude-opus-4-6"),
+        "opus":   (10.00, "claude-opus-4-6"),
     }
     m = re.match(r"^\[(haiku|sonnet|opus)\]\s*", prompt, re.IGNORECASE)
     if m:
@@ -287,6 +290,29 @@ async def list_jobs(authorization: Optional[str] = Header(None)):
 @app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     data = await request.json()
+
+    # Handle inline button taps
+    if "callback_query" in data:
+        cq = data["callback_query"]
+        chat_id = str(cq.get("message", {}).get("chat", {}).get("id", ""))
+        if chat_id == TELEGRAM_CHAT_ID:
+            cq_data = cq.get("data", "")
+            cq_id = cq.get("id")
+            if cq_data.startswith("approve:"):
+                job_id = cq_data.split(":", 1)[1]
+                await _handle_telegram_command(f"/approve {job_id}")
+            elif cq_data.startswith("reject:"):
+                job_id = cq_data.split(":", 1)[1]
+                await _handle_telegram_command(f"/reject {job_id}")
+            # Acknowledge the callback to remove the spinner
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/answerCallbackQuery",
+                    json={"callback_query_id": cq_id},
+                    timeout=5,
+                )
+        return {"ok": True}
+
     message = data.get("message", {})
     chat_id = str(message.get("chat", {}).get("id", ""))
     text = message.get("text", "").strip()
@@ -320,11 +346,26 @@ async def _poll_telegram():
             try:
                 r = await client.get(
                     f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
-                    params={"offset": offset, "timeout": 30, "allowed_updates": ["message"]},
+                    params={"offset": offset, "timeout": 30, "allowed_updates": ["message", "callback_query"]},
                     timeout=35,
                 )
                 for update in r.json().get("result", []):
                     offset = update["update_id"] + 1
+                    # Inline button callback
+                    if "callback_query" in update:
+                        cq = update["callback_query"]
+                        if str(cq.get("message", {}).get("chat", {}).get("id", "")) == TELEGRAM_CHAT_ID:
+                            cq_data = cq.get("data", "")
+                            if cq_data.startswith("approve:"):
+                                await _handle_telegram_command(f"/approve {cq_data.split(':',1)[1]}")
+                            elif cq_data.startswith("reject:"):
+                                await _handle_telegram_command(f"/reject {cq_data.split(':',1)[1]}")
+                            await client.post(
+                                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/answerCallbackQuery",
+                                json={"callback_query_id": cq["id"]},
+                                timeout=5,
+                            )
+                        continue
                     msg = update.get("message", {})
                     if str(msg.get("chat", {}).get("id", "")) == TELEGRAM_CHAT_ID:
                         await _handle_telegram_command(msg.get("text", "").strip())
@@ -374,10 +415,13 @@ async def _request_approval(job_id: str):
     job = jobs[job_id]
     task_preview = job["task"][:200]
     await tg(
-        f"📋 *New job queued* — `{job_id}`\n\n"
-        f"*Task:* {task_preview}\n\n"
-        f"`/approve {job_id}` — run it\n"
-        f"`/reject {job_id}` — discard"
+        f"📋 *New job queued* — `{job_id}`\n\n*Task:* {task_preview}",
+        reply_markup={
+            "inline_keyboard": [[
+                {"text": "✅ Approve", "callback_data": f"approve:{job_id}"},
+                {"text": "❌ Reject",  "callback_data": f"reject:{job_id}"},
+            ]]
+        }
     )
 
 
