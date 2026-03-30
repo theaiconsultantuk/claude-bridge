@@ -9,12 +9,14 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - BRIDGE_SECRET=${BRIDGE_SECRET}
       - REQUIRE_APPROVAL=${REQUIRE_APPROVAL:-true}
-      - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-4000}
+      - CLAUDE_MAX_BUDGET_USD=${CLAUDE_MAX_BUDGET_USD:-1.0}
       - WORKSPACE=/workspace
-      - CLAUDE_CONFIG_DIR=/workspace/.claude
+      - VPS_HOST=${VPS_HOST:-}
+      - VPS_WORKSPACE=${VPS_WORKSPACE:-/root/claude-workspace}
+      - VPS_SSH_KEY_B64=${VPS_SSH_KEY_B64:-}
       - BRIDGE_TELEGRAM_POLL=false
     volumes:
       - bridge-workspace:/workspace
