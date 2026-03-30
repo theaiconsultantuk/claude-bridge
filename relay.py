@@ -107,6 +107,56 @@ async def post_bridge(path: str, body: dict = None):
         return r.json()
 
 
+def classify_task(task: str) -> bool:
+    """
+    Returns True (auto-approve) for safe/read-only tasks.
+    Returns False (require Telegram approval) for destructive/risky tasks.
+    """
+    lower = task.lower()
+
+    # Explicit "force approval" prefix overrides classification
+    if lower.startswith("!unsafe ") or lower.startswith("unsafe:"):
+        return False  # always require approval
+
+    # Destructive / high-risk patterns → ALWAYS require approval
+    RISKY_PATTERNS = [
+        "delete", "remove", "drop table", "truncate", "rm -", "rm -rf",
+        "git push", "git commit", "git merge", "git reset",
+        "deploy", "redeploy", "restart service", "restart server",
+        "send email", "send message", "post to", "publish",
+        "purchase", "buy ", "pay ", "charge ",
+        "ssh ", "exec ", "shell ", "bash -c",
+        "apt install", "apt remove", "pip install",
+        "chmod 777", "chown ", "sudo ",
+        "docker rm", "docker rmi", "docker stop",
+        "create account", "sign up", "register",
+        "transfer", "wire ", "refund",
+    ]
+    for pattern in RISKY_PATTERNS:
+        if pattern in lower:
+            return False
+
+    # Safe / read-only patterns → auto-approve
+    SAFE_PATTERNS = [
+        "write", "draft", "create a", "generate", "compose",
+        "research", "summarise", "summarize", "explain", "describe",
+        "analyse", "analyze", "review", "evaluate",
+        "list", "find", "search", "look up", "what is", "how does",
+        "read ", "check ", "count ", "calculate", "convert",
+        "translate", "rewrite", "improve", "edit ", "proofread",
+        "suggest", "recommend", "plan ", "outline", "brainstorm",
+        "linkedin", "email draft", "blog post", "tweet", "script",
+        "report", "summary", "brief", "proposal",
+        "[haiku]", "[sonnet]", "[opus]",  # model tier prefix = safe
+    ]
+    for pattern in SAFE_PATTERNS:
+        if pattern in lower:
+            return True
+
+    # Default: require approval for anything ambiguous
+    return False
+
+
 async def handle_message(text: str):
     """Route a user message to the appropriate bridge endpoint."""
     global last_ts
@@ -119,8 +169,9 @@ async def handle_message(text: str):
             task = text[len(prefix):].strip()
             if not task:
                 return
-            log.info("Creating job: %s", task[:80])
-            result = await post_bridge("/jobs", {"task": task})
+            auto = classify_task(task)
+            log.info("Creating job (auto_approve=%s): %s", auto, task[:80])
+            result = await post_bridge("/jobs", {"task": task, "auto_approve": auto})
             log.info("Job created: %s", result.get("id"))
             return
 
